@@ -1,0 +1,109 @@
+import sys
+from pathlib import Path
+import json
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from PIL import Image, ExifTags
+from pycocotools.coco import COCO
+from matplotlib.patches import Polygon, Rectangle
+from matplotlib.collections import PatchCollection
+import random
+import pylab
+from collections import Counter
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+# Set seaborn for visualization
+sns.set()
+
+# Function to map TACO dataset labels to detectwaste categories
+def map_taco_labels_to_detectwaste(label):
+    """Map TACO dataset labels to detectwaste categories."""
+    categories_mapping = {
+        "glass": ['Glass bottle', 'Broken glass', 'Glass jar'],
+        "metals_and_plastics": [
+            'Aluminium foil', "Clear plastic bottle", "Other plastic bottle",
+            "Plastic bottle cap", "Metal bottle cap", "Aerosol", "Drink can",
+            "Food can", "Drink carton", "Disposable plastic cup", "Other plastic cup",
+            "Plastic lid", "Metal lid", "Single-use carrier bag", "Polypropylene bag",
+            "Plastic Film", "Six pack rings", "Spread tub", "Tupperware",
+            "Disposable food container", "Other plastic container", "Plastic gloves",
+            "Plastic utensils", "Pop tab", "Scrap metal", "Plastic straw",
+            "Other plastic", "Plastic film", "Food Can"
+        ],
+        "non_recyclable": [
+            "Aluminium blister pack", "Carded blister pack", "Meal carton", "Pizza box",
+            "Cigarette", "Paper cup", "Meal carton", "Foam cup", "Glass cup",
+            "Wrapping paper", "Magazine paper", "Garbage bag", "Plastified paper bag",
+            "Crisp packet", "Other plastic wrapper", "Foam food container", "Rope",
+            "Shoe", "Squeezable tube", "Paper straw", "Styrofoam piece", "Rope & strings",
+            "Tissues"
+        ],
+        "other": ["Battery"],
+        "paper": ["Corrugated carton", "Egg carton", "Toilet tube", "Other carton", "Normal paper", "Paper bag"],
+        "bio": ["Food waste"],
+        "unknown": ["Unlabeled litter"]
+    }
+
+    for category, items in categories_mapping.items():
+        if label in items:
+            return category
+
+    logging.warning(f"{label} is not recognized in predefined categories.")
+    return "unknown"
+
+# Function to remap Epinote dataset category IDs
+def remap_epi_category_id(epi_id):
+    """Map Epinote dataset category IDs to new IDs for detectwaste categories."""
+    epi_to_detectwaste_map = {
+        1: 4, 2: 3, 3: 2, 4: 6, 5: 7, 6: 1, 7: 5
+    }
+    return epi_to_detectwaste_map.get(epi_id, 6)
+
+# Process TACO dataset categories and annotations
+def process_taco_dataset(categories, annotations):
+    """Process TACO dataset categories and annotations."""
+    for ann in annotations:
+        cat_id = ann['category_id']
+        cat_name = categories[cat_id]['name']
+        categories[cat_id]['supercategory'] = map_taco_labels_to_detectwaste(cat_name)
+    # Handle special cases manually if required
+    categories[35]['supercategory'] = map_taco_labels_to_detectwaste("Plastified paper bag")
+    return categories
+
+# Process Epinote dataset categories and annotations
+def process_epi_dataset(categories, annotations):
+    """Process Epinote dataset categories and annotations."""
+    for cat in categories:
+        cat['id'] = remap_epi_category_id(cat['id'])
+    for ann in annotations:
+        ann['category_id'] = remap_epi_category_id(ann['category_id'])
+    return categories, annotations
+
+# Example usage
+if __name__ == "__main__":
+    # Load datasets (replace with actual paths or datasets)
+    try:
+        # Assuming dataset and epinote_dataset are JSON files or dicts
+        dataset = json.load(open("taco_dataset.json"))
+        epinote_dataset = json.load(open("epinote_dataset.json"))
+
+        taco_categories = dataset['categories']
+        taco_annotations = dataset['annotations']
+        epinote_categories = epinote_dataset['categories']
+        epinote_annotations = epinote_dataset['annotations']
+
+        # Process datasets
+        logging.info("Processing TACO dataset...")
+        taco_categories = process_taco_dataset(taco_categories, taco_annotations)
+
+        logging.info("Processing Epinote dataset...")
+        epinote_categories, epinote_annotations = process_epi_dataset(epinote_categories, epinote_annotations)
+
+        logging.info("Datasets processed successfully.")
+    except Exception as e:
+        logging.error(f"Error processing datasets: {e}")
